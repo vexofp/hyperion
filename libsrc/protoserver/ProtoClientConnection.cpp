@@ -20,7 +20,7 @@
 // project includes
 #include "ProtoClientConnection.h"
 
-ProtoClientConnection::ProtoClientConnection(QTcpSocket *socket, Hyperion * hyperion) :
+ProtoClientConnection::ProtoClientConnection(QIODevice *socket, Hyperion * hyperion) :
 	QObject(),
 	_socket(socket),
 	_imageProcessor(ImageProcessorFactory::getInstance().newImageProcessor()),
@@ -227,7 +227,7 @@ void ProtoClientConnection::sendMessage(const google::protobuf::Message &message
 	uint8_t sizeData[] = {uint8_t(size >> 24), uint8_t(size >> 16), uint8_t(size >> 8), uint8_t(size)};
 	_socket->write((const char *) sizeData, sizeof(sizeData));
 	_socket->write(serializedReply.data(), serializedReply.length());
-	_socket->flush();
+	//_socket->flush();
 }
 
 void ProtoClientConnection::sendSuccessReply()

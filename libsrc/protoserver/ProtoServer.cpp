@@ -1,5 +1,10 @@
 // system includes
 #include <stdexcept>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+// Qt includes
+#include <QRegExp>
 
 // project includes
 #include <hyperion/MessageForwarder.h>
@@ -7,10 +12,11 @@
 #include "protoserver/ProtoConnection.h"
 #include "ProtoClientConnection.h"
 
-ProtoServer::ProtoServer(Hyperion *hyperion, uint16_t port) :
+ProtoServer::ProtoServer(Hyperion *hyperion, const std::string &addr) :
 	QObject(),
 	_hyperion(hyperion),
-	_server(),
+  _addr(addr.c_str()),
+  _tcp(false),
 	_openConnections()
 {
 
@@ -18,7 +24,7 @@ ProtoServer::ProtoServer(Hyperion *hyperion, uint16_t port) :
 	QStringList slaves = forwarder->getProtoSlaves();
 
 	for (int i = 0; i < slaves.size(); ++i) {
-		if ( QString("127.0.0.1:%1").arg(port) == slaves.at(i) ) {
+		if ( _addr == slaves.at(i) ) {
 			throw std::runtime_error("PROTOSERVER ERROR: Loop between proto server and forwarder detected. Fix your config!");
 		}
 
@@ -27,13 +33,65 @@ ProtoServer::ProtoServer(Hyperion *hyperion, uint16_t port) :
 		_proxy_connections << p;
 	}
 
-	if (!_server.listen(QHostAddress::Any, port))
-	{
-		throw std::runtime_error("PROTOSERVER ERROR: Could not bind to port");
-	}
+  QRegExp portRegExp("^[0-9]{1,5}$");
+  QRegExp hostPortRegExp(":[0-9]{1,5}$");
 
-	// Set trigger for incoming connections
-	connect(&_server, SIGNAL(newConnection()), this, SLOT(newConnection()));
+  if(_addr.contains(portRegExp))
+  {
+    bool ok;
+    uint16_t port = _addr.toUShort(&ok);
+	  if (!ok)
+	  {
+	  	throw std::runtime_error("PROTOSERVER ERROR: Could not parse port number");
+	  }
+
+	  if (!_tcpServer.listen(QHostAddress::Any, port))
+	  {
+	  	throw std::runtime_error("PROTOSERVER ERROR: Could not bind to port");
+	  }
+
+  	// Set trigger for incoming connections
+	  connect(&_tcpServer, SIGNAL(newConnection()), this, SLOT(newConnection()));
+    _tcp = true;
+  }
+  else if(_addr.contains(portRegExp))
+  {
+    QStringList parts = _addr.split(":");
+    if (parts.size() != 2)
+    {
+      throw std::runtime_error(QString("PROTOCONNECTION ERROR: Wrong address: Unable to parse address (%1)").arg(_addr).toStdString());
+    }
+    QString host = parts[0];
+
+    bool ok;
+    uint16_t port = parts[1].toUShort(&ok);
+    if (!ok)
+    {
+      throw std::runtime_error(QString("PROTOCONNECTION ERROR: Wrong port: Unable to parse the port number (%1)").arg(parts[1]).toStdString());
+    }
+
+	  if (!_tcpServer.listen(QHostAddress(host), port))
+	  {
+	  	throw std::runtime_error("PROTOSERVER ERROR: Could not bind to port");
+	  }
+
+  	// Set trigger for incoming connections
+	  connect(&_tcpServer, SIGNAL(newConnection()), this, SLOT(newConnection()));
+    _tcp = true;
+  }
+  else
+  {
+    mode_t oldUmask = umask(0007);
+	  if (!_localServer.listen(_addr))
+	  {
+	  	throw std::runtime_error("PROTOSERVER ERROR: Could not bind to socket");
+	  }
+    umask(oldUmask);
+    //
+  	// Set trigger for incoming connections
+	  connect(&_localServer, SIGNAL(newConnection()), this, SLOT(newConnection()));
+  }
+
 }
 
 ProtoServer::~ProtoServer()
@@ -46,14 +104,9 @@ ProtoServer::~ProtoServer()
 		delete _proxy_connections.takeFirst();
 }
 
-uint16_t ProtoServer::getPort() const
-{
-	return _server.serverPort();
-}
-
 void ProtoServer::newConnection()
 {
-	QTcpSocket * socket = _server.nextPendingConnection();
+	QIODevice *socket = _tcp ? static_cast<QIODevice*>(_tcpServer.nextPendingConnection()) : static_cast<QIODevice *>(_localServer.nextPendingConnection());
 
 	if (socket != nullptr)
 	{
@@ -91,4 +144,9 @@ void ProtoServer::closedConnection(ProtoClientConnection *connection)
 
 	// schedule to delete the connection object
 	connection->deleteLater();
+}
+
+const QString& ProtoServer::getAddr() const
+{
+  return _addr;
 }

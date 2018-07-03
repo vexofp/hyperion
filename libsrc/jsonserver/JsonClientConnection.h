@@ -5,7 +5,7 @@
 
 // Qt includes
 #include <QByteArray>
-#include <QTcpSocket>
+#include <QIODevice>
 
 // jsoncpp includes
 #include <json/json.h>
@@ -31,7 +31,7 @@ public:
 	/// @param socket The Socket object for this connection
 	/// @param hyperion The Hyperion server
 	///
-	JsonClientConnection(QTcpSocket * socket, Hyperion * hyperion);
+	JsonClientConnection(QIODevice * socket, Hyperion * hyperion);
 
 	///
 	/// Destructor
@@ -145,7 +145,7 @@ private:
 	/// @param message The JSON message to send
 	///
 	void sendMessage(const Json::Value & message);
-	void sendMessage(const Json::Value & message, QTcpSocket * socket);
+	void sendMessage(const Json::Value & message, QIODevice * socket);
 
 	///
 	/// Send a standard reply indicating success
@@ -188,7 +188,7 @@ private:
 
 private:
 	/// The TCP-Socket that is connected tot the Json-client
-	QTcpSocket * _socket;
+	QIODevice * _socket;
 
 	/// The processor for translating images to led-values
 	ImageProcessor * _imageProcessor;

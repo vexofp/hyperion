@@ -6,7 +6,9 @@
 // Qt includes
 #include <QColor>
 #include <QImage>
+#include <QIODevice>
 #include <QTcpSocket>
+#include <QLocalSocket>
 #include <QTimer>
 #include <QMap>
 
@@ -82,7 +84,8 @@ public:
 
 private slots:
 	/// Try to connect to the Hyperion host
-	void connectToHost();
+	void connectToTcpHost();
+	void connectToLocalHost();
 
 	///
 	/// Slot called when new data has arrived
@@ -110,19 +113,21 @@ private:
 
 private:
 	/// The TCP-Socket with the connection to the server
-	QTcpSocket _socket;
+  union
+  {
+	  QIODevice *io;
+    QTcpSocket *tcp;
+    QLocalSocket *local;
+  } _socket;
 
-	/// Host address
-	QString _host;
-
-	/// Host port
-	uint16_t _port;
+	/// Peer address
+	QString _addr;
 
 	/// Skip receiving reply messages from Hyperion if set
 	bool _skipReply;
 
 	QTimer _timer;
-	QAbstractSocket::SocketState  _prevSocketState;
+	bool _sockConnected;
 	
 	/// The buffer used for reading data from the socket
 	QByteArray _receiveBuffer;

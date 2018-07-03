@@ -3,40 +3,68 @@
 
 // Qt includes
 #include <QRgb>
+#include <QTcpSocket>
+#include <QLocalSocket>
 
 // hyperion-remote includes
 #include "JsonConnection.h"
 
 JsonConnection::JsonConnection(const std::string & a, bool printJson) :
-	_printJson(printJson),
-	_socket()
+	_printJson(printJson)
 {
-	QString address(a.c_str());
-	QStringList parts = address.split(":");
-	if (parts.size() != 2)
-	{
-		throw std::runtime_error(QString("Wrong address: unable to parse address (%1)").arg(address).toStdString());
-	}
+  QString addr(a.c_str());
+  QRegExp hostPortRegExp(":[0-9]{1,5}$");
+  if(addr.contains(hostPortRegExp))
+  {
+    QTcpSocket *socket = new QTcpSocket();
+    _socket = socket;
 
-	bool ok;
-	uint16_t port = parts[1].toUShort(&ok);
-	if (!ok)
-	{
-		throw std::runtime_error(QString("Wrong address: Unable to parse the port number (%1)").arg(parts[1]).toStdString());
-	}
+    QStringList parts = addr.split(":");
+    if (parts.size() != 2)
+    {
+      throw std::runtime_error(QString("PROTOCONNECTION ERROR: Wrong address: Unable to parse address (%1)").arg(addr).toStdString());
+    }
+    QString host = parts[0];
 
-	_socket.connectToHost(parts[0], port);
-	if (!_socket.waitForConnected())
-	{
-		throw std::runtime_error("Unable to connect to host");
-	}
+    bool ok;
+    uint16_t port = parts[1].toUShort(&ok);
+    if (!ok)
+    {
+      throw std::runtime_error(QString("PROTOCONNECTION ERROR: Wrong port: Unable to parse the port number (%1)").arg(parts[1]).toStdString());
+    }
+
+    // try to connect to host
+    std::cout << "PROTOCONNECTION INFO: Connecting to Hyperion: " << host.toStdString() << ":" << port << std::endl;
+
+    socket->connectToHost(host, port);
+    if (!socket->waitForConnected())
+    {
+      throw std::runtime_error("Unable to connect to host");
+    }
+  }
+  else
+  {
+    QLocalSocket *socket = new QLocalSocket();
+    _socket = socket;
+
+    // try to connect to host
+    std::cout << "PROTOCONNECTION INFO: Connecting to Hyperion: " << addr.toStdString() << std::endl;
+
+    socket->connectToServer(addr);
+    if (!socket->waitForConnected())
+    {
+      throw std::runtime_error("Unable to connect to host");
+    }
+  }
+  
 
 	std::cout << "Connected to " << a << std::endl;
 }
 
 JsonConnection::~JsonConnection()
 {
-	_socket.close();
+	_socket->close();
+  delete _socket;
 }
 
 void JsonConnection::setColor(std::vector<QColor> colors, int priority, int duration)
@@ -385,8 +413,9 @@ Json::Value JsonConnection::sendMessage(const Json::Value & message)
 	}
 
 	// write message
-	_socket.write(serializedMessage.c_str());
-	if (!_socket.waitForBytesWritten())
+	size_t count = _socket->write(serializedMessage.c_str());
+  _socket->waitForBytesWritten(count);
+	if (count != serializedMessage.size())
 	{
 		throw std::runtime_error("Error while writing data to host");
 	}
@@ -396,12 +425,12 @@ Json::Value JsonConnection::sendMessage(const Json::Value & message)
 	while (!serializedReply.contains('\n'))
 	{
 		// receive reply
-		if (!_socket.waitForReadyRead())
+		if (!_socket->waitForReadyRead(-1))
 		{
 			throw std::runtime_error("Error while reading data from host");
 		}
 
-		serializedReply += _socket.readAll();
+		serializedReply += _socket->readAll();
 	}
 	int bytes = serializedReply.indexOf('\n') + 1;     // Find the end of message
 

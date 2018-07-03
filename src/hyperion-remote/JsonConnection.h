@@ -6,7 +6,7 @@
 // Qt includes
 #include <QColor>
 #include <QImage>
-#include <QTcpSocket>
+#include <QIODevice>
 #include <QMap>
 
 // jsoncpp includes
@@ -172,5 +172,5 @@ private:
 	bool _printJson;
 
 	/// The TCP-Socket with the connection to the server
-	QTcpSocket _socket;
+	QIODevice *_socket;
 };

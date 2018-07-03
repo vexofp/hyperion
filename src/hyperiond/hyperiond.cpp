@@ -198,33 +198,54 @@ void startXBMCVideoChecker(const Json::Value &config, XBMCVideoChecker* &xbmcVid
 void startNetworkServices(const Json::Value &config, Hyperion &hyperion, JsonServer* &jsonServer, ProtoServer* &protoServer, BoblightServer* &boblightServer, XBMCVideoChecker* &xbmcVideoChecker)
 {
 	// Create Json server if configuration is present
-	unsigned int jsonPort = 19444;
+  std::string jsonAddr = "19445";
 	if (config.isMember("jsonServer"))
 	{
 		const Json::Value & jsonServerConfig = config["jsonServer"];
 		//jsonEnable = jsonServerConfig.get("enable", true).asBool();
-		jsonPort   = jsonServerConfig.get("port", jsonPort).asUInt();
+    if(jsonServerConfig["port"].isIntegral())
+    {
+	    unsigned int jsonPort  = jsonServerConfig.get("port", 19445).asUInt();
+      jsonAddr = QString::number(jsonPort).toStdString();
+    }
+    else
+    {
+	    jsonAddr  = jsonServerConfig.get("port", jsonAddr).asString();
+    }
 	}
 
-	jsonServer = new JsonServer(&hyperion, jsonPort );
-	std::cout << "INFO: Json server created and started on port " << jsonServer->getPort() << std::endl;
+	jsonServer = new JsonServer(&hyperion, jsonAddr );
+	if (xbmcVideoChecker != nullptr)
+	{
+		QObject::connect(xbmcVideoChecker, SIGNAL(grabbingMode(GrabbingMode)), jsonServer, SIGNAL(grabbingMode(GrabbingMode)));
+		QObject::connect(xbmcVideoChecker, SIGNAL(videoMode(VideoMode)), jsonServer, SIGNAL(videoMode(VideoMode)));
+	}
+	std::cout << "INFO: Json server created and started on " << jsonServer->getAddr().toStdString() << std::endl;
 
 	// Create Proto server if configuration is present
-	unsigned int protoPort = 19445;
+  std::string protoAddr = "19445";
 	if (config.isMember("protoServer"))
 	{
 		const Json::Value & protoServerConfig = config["protoServer"];
 		//protoEnable = protoServerConfig.get("enable", true).asBool();
-		protoPort  = protoServerConfig.get("port", protoPort).asUInt();
+    if(protoServerConfig["port"].isIntegral())
+    {
+	    unsigned int protoPort  = protoServerConfig.get("port", 19445).asUInt();
+      protoAddr = QString::number(protoPort).toStdString();
+    }
+    else
+    {
+	    protoAddr  = protoServerConfig.get("port", protoAddr).asString();
+    }
 	}
 
-	protoServer = new ProtoServer(&hyperion, protoPort );
+	protoServer = new ProtoServer(&hyperion, protoAddr );
 	if (xbmcVideoChecker != nullptr)
 	{
 		QObject::connect(xbmcVideoChecker, SIGNAL(grabbingMode(GrabbingMode)), protoServer, SIGNAL(grabbingMode(GrabbingMode)));
 		QObject::connect(xbmcVideoChecker, SIGNAL(videoMode(VideoMode)), protoServer, SIGNAL(videoMode(VideoMode)));
 	}
-	std::cout << "INFO: Proto server created and started on port " << protoServer->getPort() << std::endl;
+	std::cout << "INFO: Proto server created and started on " << protoServer->getAddr().toStdString() << std::endl;
 
 #ifdef ENABLE_ZEROCONF
 	const Json::Value & deviceConfig = config["device"];

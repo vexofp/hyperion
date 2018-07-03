@@ -13,6 +13,7 @@
 #include <QDateTime>
 #include <QCryptographicHash>
 #include <QHostInfo>
+#include <QTcpSocket>
 
 // hyperion util includes
 #include <hyperion/ImageProcessorFactory.h>
@@ -27,7 +28,7 @@
 // project includes
 #include "JsonClientConnection.h"
 
-JsonClientConnection::JsonClientConnection(QTcpSocket *socket, Hyperion * hyperion) :
+JsonClientConnection::JsonClientConnection(QIODevice *socket, Hyperion * hyperion) :
 	QObject(),
 	_socket(socket),
 	_imageProcessor(ImageProcessorFactory::getInstance().newImageProcessor()),
@@ -152,7 +153,7 @@ void JsonClientConnection::handleWebSocketFrame()
 				// close request, confirm
 				quint8 close[] = {0x88, 0};				
 				_socket->write((const char*)close, 2);
-				_socket->flush();
+				//_socket->flush();
 				_socket->close();
 			}
 			break;
@@ -161,7 +162,7 @@ void JsonClientConnection::handleWebSocketFrame()
 				// ping received, send pong
 				quint8 pong[] = {0x0A, 0};				
 				_socket->write((const char*)pong, 2);
-				_socket->flush();
+				//_socket->flush();
 			}
 			break;
 		}
@@ -170,7 +171,7 @@ void JsonClientConnection::handleWebSocketFrame()
 		std::cout << "JSONCLIENT INFO: Someone is sending very big messages over several frames... it's not supported yet" << std::endl;
 		quint8 close[] = {0x88, 0};				
 		_socket->write((const char*)close, 2);
-		_socket->flush();
+		//_socket->flush();
 		_socket->close();
 	}
 }
@@ -199,7 +200,7 @@ void JsonClientConnection::doWebSocketHandshake()
 	"Sec-WebSocket-Accept: " << QString(hash.toBase64()).toStdString() << "\r\n\r\n";
 
 	_socket->write(h.str().c_str());
-	_socket->flush();
+	//_socket->flush();
 	// we are in WebSocket mode, data frames should follow next
 	_webSocketHandshakeDone = true;
 }
@@ -835,14 +836,15 @@ void JsonClientConnection::sendMessage(const Json::Value &message)
 }
 
 
-void JsonClientConnection::sendMessage(const Json::Value & message, QTcpSocket * socket)
+void JsonClientConnection::sendMessage(const Json::Value & message, QIODevice * socket)
 {
 	// serialize message (FastWriter already appends a newline)
 	std::string serializedMessage = Json::FastWriter().write(message);
 
 	// write message
-	socket->write(serializedMessage.c_str());
-	if (!socket->waitForBytesWritten())
+	size_t count = socket->write(serializedMessage.c_str());
+  socket->waitForBytesWritten(count);
+	if (count != serializedMessage.size())
 	{
 		//std::cout << "Error while writing data to host" << std::endl;
 		return;
@@ -853,7 +855,7 @@ void JsonClientConnection::sendMessage(const Json::Value & message, QTcpSocket *
 	while (!serializedReply.contains('\n'))
 	{
 		// receive reply
-		if (!socket->waitForReadyRead())
+		if (!socket->waitForReadyRead(-1))
 		{
 			//std::cout << "Error while reading data from host" << std::endl;
 			return;

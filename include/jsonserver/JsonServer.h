@@ -5,6 +5,7 @@
 
 // Qt includes
 #include <QTcpServer>
+#include <QLocalServer>
 #include <QSet>
 
 // Hyperion includes
@@ -27,13 +28,13 @@ public:
 	/// @param hyperion Hyperion instance
 	/// @param port port number on which to start listening for connections
 	///
-	JsonServer(Hyperion * hyperion, uint16_t port = 19444);
+	JsonServer(Hyperion * hyperion, const std::string &addr);
 	~JsonServer();
 
 	///
 	/// @return the port number on which this TCP listens for incoming connections
 	///
-	uint16_t getPort() const;
+	const QString& getAddr() const;
 
 private slots:
 	///
@@ -51,8 +52,12 @@ private:
 	/// Hyperion instance
 	Hyperion * _hyperion;
 
+  QString _addr;
+
 	/// The TCP server object
-	QTcpServer _server;
+  bool _tcp;
+	QTcpServer _tcpServer;
+  QLocalServer _localServer;
 
 	/// List with open connections
 	QSet<JsonClientConnection *> _openConnections;

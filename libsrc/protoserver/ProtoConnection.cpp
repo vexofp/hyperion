@@ -3,52 +3,49 @@
 
 // Qt includes
 #include <QRgb>
+#include <QRegExp>
 
 // protoserver includes
 #include "protoserver/ProtoConnection.h"
 
 ProtoConnection::ProtoConnection(const std::string & a) :
-	_socket(),
+  _addr(a.c_str()),
 	_skipReply(false),
-	_prevSocketState(QAbstractSocket::UnconnectedState)
+	_sockConnected(false)
 {
-	QString address(a.c_str());
-	QStringList parts = address.split(":");
-	if (parts.size() != 2)
-	{
-		throw std::runtime_error(QString("PROTOCONNECTION ERROR: Wrong address: Unable to parse address (%1)").arg(address).toStdString());
-	}
-	_host = parts[0];
-
-	bool ok;
-	_port = parts[1].toUShort(&ok);
-	if (!ok)
-	{
-		throw std::runtime_error(QString("PROTOCONNECTION ERROR: Wrong port: Unable to parse the port number (%1)").arg(parts[1]).toStdString());
-	}
-
-	// try to connect to host
-	std::cout << "PROTOCONNECTION INFO: Connecting to Hyperion: " << _host.toStdString() << ":" << _port << std::endl;
-	connectToHost();
-
-	// start the connection timer
 	_timer.setInterval(5000);
 	_timer.setSingleShot(false);
 
-	connect(&_timer,SIGNAL(timeout()), this, SLOT(connectToHost()));
-	connect(&_socket, SIGNAL(readyRead()), this, SLOT(readData()));
+  QRegExp hostPortRegExp(":[0-9]{1,5}$");
+  if(_addr.contains(hostPortRegExp))
+  {
+    _socket.io = new QTcpSocket();
+    connectToTcpHost();
+
+	  connect(&_timer,SIGNAL(timeout()), this, SLOT(connectToTcpHost()));
+  }
+  else
+  {
+    _socket.io = new QLocalSocket();
+    connectToLocalHost();
+
+	  connect(&_timer,SIGNAL(timeout()), this, SLOT(connectToLocalHost()));
+  }
+
+	connect(_socket.io, SIGNAL(readyRead()), this, SLOT(readData()));
 	_timer.start();
 }
 
 ProtoConnection::~ProtoConnection()
 {
 	_timer.stop();
-	_socket.close();
+	_socket.io->close();
+  delete _socket.io;
 }
 
 void ProtoConnection::readData()
 {	
-	_receiveBuffer += _socket.readAll();
+	_receiveBuffer += _socket.io->readAll();
 
 	// check if we can read a message size
 	if (_receiveBuffer.size() <= 4)
@@ -137,40 +134,63 @@ void ProtoConnection::clearAll()
 	sendMessage(request);
 }
 
-void ProtoConnection::connectToHost()
+void ProtoConnection::connectToTcpHost()
 {
 	// try connection only when 
-	if (_socket.state() == QAbstractSocket::UnconnectedState)
+	if (!_socket.io->isOpen())
 	{
-	   _socket.connectToHost(_host, _port);
-	   //_socket.waitForConnected(1000);
+    QStringList parts = _addr.split(":");
+    if (parts.size() != 2)
+    {
+      throw std::runtime_error(QString("PROTOCONNECTION ERROR: Wrong address: Unable to parse address (%1)").arg(_addr).toStdString());
+    }
+    QString host = parts[0];
+
+    bool ok;
+    uint16_t port = parts[1].toUShort(&ok);
+    if (!ok)
+    {
+      throw std::runtime_error(QString("PROTOCONNECTION ERROR: Wrong port: Unable to parse the port number (%1)").arg(parts[1]).toStdString());
+    }
+
+    // try to connect to host
+    std::cout << "PROTOCONNECTION INFO: Connecting to Hyperion: " << host.toStdString() << ":" << port << std::endl;
+
+    _socket.tcp->connectToHost(host, port);
+	}
+}
+
+void ProtoConnection::connectToLocalHost()
+{
+	// try connection only when 
+	if (!_socket.io->isOpen())
+	{
+    // try to connect to host
+    std::cout << "PROTOCONNECTION INFO: Connecting to Hyperion: " << _addr.toStdString() << std::endl;
+
+    _socket.local->connectToServer(_addr);
 	}
 }
 
 void ProtoConnection::sendMessage(const proto::HyperionRequest &message)
 {
 	// print out connection message only when state is changed
-	if (_socket.state() != _prevSocketState )
+	if (_socket.io->isOpen() != _sockConnected )
 	{
-	  switch (_socket.state() )
-	  {
-		case QAbstractSocket::UnconnectedState:
-		  std::cout << "PROTOCONNECTION INFO: No connection to Hyperion: " << _host.toStdString() << ":" << _port << std::endl;
-		  break;
+	  if (!_socket.io->isOpen())
+    {
+		  std::cout << "PROTOCONNECTION INFO: No connection to Hyperion: " << _addr.toStdString() << std::endl;
+    }
+    else
+    {
+		  std::cout << "PROTOCONNECTION INFO: Connected to Hyperion: " << _addr.toStdString() << std::endl;
+    }
 
-		case QAbstractSocket::ConnectedState:
-		  std::cout << "PROTOCONNECTION INFO: Connected to Hyperion: " << _host.toStdString() << ":" << _port << std::endl;
-		  break;
-
-		default:
-		  //std::cout << "Connecting to Hyperion: " << _host.toStdString() << ":" << _port << std::endl;
-		  break;
-	  }
-	  _prevSocketState = _socket.state();
+	  _sockConnected = _socket.io->isOpen();
 	}
 
 
-	if (_socket.state() != QAbstractSocket::ConnectedState)
+	if (!_socket.io->isOpen())
 	{
 		return;
 	}
@@ -189,9 +209,10 @@ void ProtoConnection::sendMessage(const proto::HyperionRequest &message)
 
 	// write message
 	int count = 0;
-	count += _socket.write(reinterpret_cast<const char *>(header), 4);
-	count += _socket.write(reinterpret_cast<const char *>(serializedMessage.data()), length);
-	if (!_socket.waitForBytesWritten())
+	count += _socket.io->write(reinterpret_cast<const char *>(header), 4);
+	count += _socket.io->write(reinterpret_cast<const char *>(serializedMessage.data()), length);
+	_socket.io->waitForBytesWritten(count);
+	if (count != length + 4)
 	{
 		std::cerr << "PROTOCONNECTION ERROR: Error while writing data to host" << std::endl;
 		return;

@@ -5,7 +5,7 @@
 
 // Qt includes
 #include <QByteArray>
-#include <QTcpSocket>
+#include <QIODevice>
 #include <QStringList>
 
 // Hyperion includes
@@ -34,7 +34,7 @@ public:
 	/// @param socket The Socket object for this connection
 	/// @param hyperion The Hyperion server
 	///
-	ProtoClientConnection(QTcpSocket * socket, Hyperion * hyperion);
+	ProtoClientConnection(QIODevice * socket, Hyperion * hyperion);
 
 	///
 	/// Destructor
@@ -127,7 +127,7 @@ private:
 
 private:
 	/// The TCP-Socket that is connected tot the Proto-client
-	QTcpSocket * _socket;
+	QIODevice * _socket;
 
 	/// The processor for translating images to led-values
 	ImageProcessor * _imageProcessor;

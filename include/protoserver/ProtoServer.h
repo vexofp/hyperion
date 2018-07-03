@@ -4,6 +4,7 @@
 #include <cstdint>
 
 // Qt includes
+#include <QLocalServer>
 #include <QTcpServer>
 #include <QSet>
 #include <QList>
@@ -41,13 +42,10 @@ public:
 	/// @param hyperion Hyperion instance
 	/// @param port port number on which to start listening for connections
 	///
-	ProtoServer(Hyperion * hyperion, uint16_t port = 19445);
+	ProtoServer(Hyperion * hyperion, const std::string &addr);
 	~ProtoServer();
 
-	///
-	/// @return the port number on which this TCP listens for incoming connections
-	///
-	uint16_t getPort() const;
+  const QString &getAddr() const;
 
 public slots:
 	void sendImageToProtoSlaves(int priority, const Image<ColorRgb> & image, int duration_ms);
@@ -77,8 +75,12 @@ private:
 	/// Hyperion instance
 	Hyperion * _hyperion;
 
+  QString _addr;
+
 	/// The TCP server object
-	QTcpServer _server;
+  bool _tcp;
+	QTcpServer _tcpServer;
+  QLocalServer _localServer;
 
 	/// List with open connections
 	QSet<ProtoClientConnection *> _openConnections;
