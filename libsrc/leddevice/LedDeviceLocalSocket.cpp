@@ -32,13 +32,14 @@ LedDeviceLocalSocket::LedDeviceLocalSocket(const std::string& output, const unsi
 		leds_per_pkt = 200;
 	}
 
-  sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+  sockfd = socket(AF_UNIX, SOCK_DGRAM|SOCK_CLOEXEC, 0);
 	if (sockfd < 0) {
 		fprintf(stderr, "talker: failed to create socket\n");
 		assert(sockfd>=0);
 	}
 
   struct sockaddr_un sun = {0};
+  sun.sun_family = AF_UNIX;
   strncpy(sun.sun_path, output.c_str(), sizeof(sun.sun_path));
   int connectrc = connect(sockfd, (struct sockaddr*)&sun, sizeof(sun));
 	if (connectrc) {
