@@ -43,7 +43,7 @@ LedDeviceLocalSocket::LedDeviceLocalSocket(const std::string& output, const unsi
   int connectrc = connect(sockfd, (struct sockaddr*)&sun, sizeof(sun));
 	if (connectrc) {
     close(sockfd);
-		fprintf(stderr, "talker: failed to bind socket\n");
+		fprintf(stderr, "talker: failed to connect socket\n");
 		assert(!connectrc);
 	}
 }
