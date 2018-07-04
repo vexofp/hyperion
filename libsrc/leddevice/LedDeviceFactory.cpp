@@ -33,6 +33,7 @@
 #include "LedDeviceFile.h"
 #include "LedDeviceFadeCandy.h"
 #include "LedDeviceUdp.h"
+#include "LedDeviceLocalSocket.h"
 #include "LedDeviceUdpRaw.h"
 #include "LedDeviceHyperionUsbasp.h"
 #include "LedDevicePhilipsHue.h"
@@ -318,6 +319,14 @@ LedDevice * LedDeviceFactory::construct(const Json::Value & deviceConfig)
 		const unsigned protocol  = deviceConfig["protocol"].asInt();
 		const unsigned maxPacket   = deviceConfig["maxpacket"].asInt();
 		device = new LedDeviceUdp(output, rate, protocol, maxPacket);
+	}
+	else if (type == "local")
+	{
+		const std::string output = deviceConfig["output"].asString();
+		const unsigned rate      = deviceConfig["rate"].asInt();
+		const unsigned protocol  = deviceConfig["protocol"].asInt();
+		const unsigned maxPacket   = deviceConfig["maxpacket"].asInt();
+		device = new LedDeviceLocalSocket(output, rate, protocol, maxPacket);
 	}
 	else if (type == "udpraw")
 	{
